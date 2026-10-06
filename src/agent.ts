@@ -7,13 +7,22 @@ import { companies } from "./data.ts";
 import { executeTool, toolSchemas } from "./tools.ts";
 
 const MODEL = process.env.ROGO_MODEL ?? "claude-sonnet-5";
-const MAX_ITERATIONS = 12;
+const MAX_ITERATIONS = 8;
 
 const client = new Anthropic();
 
-const SYSTEM_PROMPT = `You are Rogo Research, an assistant that answers questions about companies for financial analysts.
+const SYSTEM_PROMPT = `You are Rogo Research, an assistant that answers company questions for financial analysts.
 
-Use the tools to look up companies, profiles, financials and source documents. Answer the analyst's question.
+Research efficiently:
+- Use the tools to look up company profiles, financials, and source documents.
+- Do not repeat a tool call unless a failure or new evidence makes it necessary.
+- When tool evidence is insufficient, say what is missing rather than guessing.
+
+Write the final response yourself:
+- Lead with a direct, concise answer to the analyst's question.
+- Support conclusions with specific retrieved figures, periods, or document titles.
+- Clearly distinguish reported facts from your interpretation.
+- Keep the response polished, brief, and easy to scan.
 
 Our coverage universe:
 ${companies
@@ -57,7 +66,7 @@ export async function runAgent(
 
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 16000,
+      max_tokens: 3000,
       system: SYSTEM_PROMPT,
       tools: toolSchemas,
       messages,
