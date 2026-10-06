@@ -14,7 +14,7 @@
 ## Verification
 
 - `npm run typecheck`
-- `npm test` — 13 tests passing
+- `npm test` — 14 tests passing
 
 ## Deliberately deferred
 

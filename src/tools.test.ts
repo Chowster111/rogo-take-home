@@ -25,6 +25,12 @@ describe("executeTool", () => {
     });
   });
 
+  it("prioritizes an exact uppercase ticker over ambiguous name matches", async () => {
+    const result = await runDelayedTool("getCompanyProfile", { company: "ACME" });
+
+    expect(result).toMatchObject({ name: "Acme Corp", ticker: "ACME" });
+  });
+
   it("matches company names case-insensitively and ignores punctuation", async () => {
     const result = await runDelayedTool("getCompanyProfile", {
       company: "gLoBeX, Inc.",

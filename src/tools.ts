@@ -48,6 +48,11 @@ function resolveCompany(identifier: string) {
     throw new ToolError("company must contain letters or numbers");
   }
 
+  const exactTickerMatch = companies.find(
+    (company) => company.ticker === identifier.trim(),
+  );
+  if (exactTickerMatch) return exactTickerMatch;
+
   const nameMatch = companies.find((company) => normalize(company.name) === needle);
   if (nameMatch) return nameMatch;
 
