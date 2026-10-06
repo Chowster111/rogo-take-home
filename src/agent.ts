@@ -44,6 +44,11 @@ export interface AgentResult {
   iterations: number;
 }
 
+export interface ConversationMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 function textOf(message: Anthropic.Message): string {
   return message.content
     .filter((block): block is Anthropic.TextBlock => block.type === "text")
@@ -52,10 +57,13 @@ function textOf(message: Anthropic.Message): string {
 }
 
 export async function runAgent(
-  question: string,
+  conversation: ConversationMessage[],
   onEvent: (event: AgentEvent) => void,
 ): Promise<AgentResult> {
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: question }];
+  const messages: Anthropic.MessageParam[] = conversation.map((message) => ({
+    role: message.role,
+    content: message.content,
+  }));
 
   let draft = "";
   let iterations = 0;

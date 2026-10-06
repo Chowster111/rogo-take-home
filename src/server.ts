@@ -1,6 +1,6 @@
 import "dotenv/config";
 import express from "express";
-import { runAgent } from "./agent.ts";
+import { runAgent, type ConversationMessage } from "./agent.ts";
 
 if (!process.env.ANTHROPIC_API_KEY) {
   console.error(
@@ -12,12 +12,36 @@ if (!process.env.ANTHROPIC_API_KEY) {
 const app = express();
 app.use(express.json());
 
+function isConversationMessage(value: unknown): value is ConversationMessage {
+  if (typeof value !== "object" || value === null) return false;
+
+  const message = value as Record<string, unknown>;
+  return (
+    (message.role === "user" || message.role === "assistant") &&
+    typeof message.content === "string" &&
+    message.content.trim().length > 0
+  );
+}
+
 app.post("/api/chat", async (req, res) => {
-  const message = String(req.body.message ?? "");
-  console.log(`\n[chat] ${message}`);
+  const conversation = req.body.messages;
+  if (
+    !Array.isArray(conversation) ||
+    conversation.length === 0 ||
+    !conversation.every(isConversationMessage) ||
+    conversation.at(-1)?.role !== "user"
+  ) {
+    res
+      .status(400)
+      .json({ error: "A conversation ending with a user message is required." });
+    return;
+  }
+
+  const latestMessage = conversation.at(-1)!;
+  console.log(`\n[chat] ${latestMessage.content}`);
 
   try {
-    const result = await runAgent(message, (event) => {
+    const result = await runAgent(conversation, (event) => {
       switch (event.type) {
         case "iteration":
           console.log(`[agent] iteration ${event.n}`);

@@ -3,6 +3,7 @@ import { useState } from "react";
 interface Message {
   role: "user" | "assistant";
   text: string;
+  isError?: boolean;
 }
 
 const EXAMPLES = [
@@ -20,7 +21,10 @@ export function App() {
   async function send(question: string) {
     if (!question.trim() || busy) return;
 
-    setMessages((prev) => [...prev, { role: "user", text: question }]);
+    const userMessage: Message = { role: "user", text: question.trim() };
+    const conversation = [...messages.filter((message) => !message.isError), userMessage];
+
+    setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setBusy(true);
 
@@ -28,17 +32,29 @@ export function App() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: question }),
+        body: JSON.stringify({
+          messages: conversation.map(({ role, text }) => ({
+            role,
+            content: text,
+          })),
+        }),
       });
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error ?? `Request failed with status ${res.status}`);
+      }
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: data.answer ?? data.error },
+        { role: "assistant", text: data.answer },
       ]);
     } catch (err) {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: `Something went wrong: ${String(err)}` },
+        {
+          role: "assistant",
+          text: `Something went wrong: ${String(err)}`,
+          isError: true,
+        },
       ]);
     }
 
