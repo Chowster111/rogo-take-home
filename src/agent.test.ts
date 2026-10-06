@@ -42,7 +42,7 @@ describe("runAgent", () => {
       },
     };
 
-    const result = await runAgent(conversation, () => {}, dependencies);
+    const result = await runAgent(conversation, () => {}, { dependencies });
 
     expect(result).toEqual({ answer: "Acme is growing.", iterations: 1 });
   });
@@ -66,7 +66,7 @@ describe("runAgent", () => {
       },
     };
 
-    await runAgent(longConversation, () => {}, dependencies);
+    await runAgent(longConversation, () => {}, { dependencies });
 
     expect(observedMessages).toHaveLength(9);
     expect(observedMessages[0].role).toBe("user");
@@ -101,7 +101,7 @@ describe("runAgent", () => {
       },
     };
 
-    const resultPromise = runAgent(conversation, () => {}, dependencies);
+    const resultPromise = runAgent(conversation, () => {}, { dependencies });
 
     await vi.waitFor(() => {
       expect(started).toEqual(["firstTool", "secondTool"]);
@@ -150,7 +150,9 @@ describe("runAgent", () => {
       },
     };
 
-    const result = await runAgent(conversation, (event) => events.push(event), dependencies);
+    const result = await runAgent(conversation, (event) => events.push(event), {
+      dependencies,
+    });
 
     expect(result.answer).toBe("Used the available result.");
     expect(observedToolResults).toEqual([
@@ -173,6 +175,35 @@ describe("runAgent", () => {
     });
   });
 
+  it("passes cancellation to an in-flight model request", async () => {
+    const controller = new AbortController();
+    let receivedSignal: AbortSignal | undefined;
+    const dependencies: AgentDependencies = {
+      createMessage: async (_params, signal) => {
+        receivedSignal = signal;
+        return new Promise<Anthropic.Message>((_resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(signal.reason), {
+            once: true,
+          });
+        });
+      },
+      executeTool: async () => {
+        throw new Error("tool should not be called");
+      },
+    };
+
+    const result = runAgent(conversation, () => {}, {
+      dependencies,
+      signal: controller.signal,
+    });
+    const rejection = expect(result).rejects.toMatchObject({ name: "AbortError" });
+
+    await vi.waitFor(() => expect(receivedSignal).toBe(controller.signal));
+    controller.abort();
+
+    await rejection;
+  });
+
   it("returns the fallback after reaching the iteration limit", async () => {
     let modelCalls = 0;
     const dependencies: AgentDependencies = {
@@ -183,7 +214,7 @@ describe("runAgent", () => {
       executeTool: async () => ({ found: true }),
     };
 
-    const result = await runAgent(conversation, () => {}, dependencies);
+    const result = await runAgent(conversation, () => {}, { dependencies });
 
     expect(modelCalls).toBe(8);
     expect(result).toEqual({

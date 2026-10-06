@@ -31,6 +31,20 @@ describe("executeTool", () => {
     expect(result).toMatchObject({ name: "Acme Corp", ticker: "ACME" });
   });
 
+  it("cancels an in-flight tool call", async () => {
+    const controller = new AbortController();
+    const result = executeTool(
+      "getFinancials",
+      { company: "GLBX" },
+      controller.signal,
+    );
+    const rejection = expect(result).rejects.toMatchObject({ name: "AbortError" });
+
+    controller.abort();
+
+    await rejection;
+  });
+
   it("matches company names case-insensitively and ignores punctuation", async () => {
     const result = await runDelayedTool("getCompanyProfile", {
       company: "gLoBeX, Inc.",

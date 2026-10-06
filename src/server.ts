@@ -73,6 +73,12 @@ app.post("/api/chat", async (req, res) => {
   const latestMessage = conversation.at(-1)!;
   console.log(`\n[chat] ${latestMessage.content}`);
 
+  const controller = new AbortController();
+  const handleClose = () => {
+    if (!res.writableEnded) controller.abort();
+  };
+  res.on("close", handleClose);
+
   res.status(200);
   res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -80,36 +86,45 @@ app.post("/api/chat", async (req, res) => {
   res.flushHeaders();
 
   const send = (event: StreamEvent) => {
-    res.write(`${JSON.stringify(event)}\n`);
+    if (!res.destroyed && !res.writableEnded) {
+      res.write(`${JSON.stringify(event)}\n`);
+    }
   };
 
   try {
-    const result = await runAgent(conversation, (event) => {
-      const progress = progressMessage(event);
-      if (progress) send({ type: "progress", message: progress });
+    const result = await runAgent(
+      conversation,
+      (event) => {
+        const progress = progressMessage(event);
+        if (progress) send({ type: "progress", message: progress });
 
-      switch (event.type) {
-        case "iteration":
-          console.log(`[agent] iteration ${event.n}`);
-          break;
-        case "tool_start":
-          console.log(`[tool]  → ${event.name} ${JSON.stringify(event.input)}`);
-          break;
-        case "tool_end":
-          console.log(`[tool]  ← ${event.name} (${event.ms}ms)`);
-          break;
-        case "tool_failed":
-          console.log(`[tool]  ! ${event.name}: ${event.message}`);
-          break;
-      }
-    });
+        switch (event.type) {
+          case "iteration":
+            console.log(`[agent] iteration ${event.n}`);
+            break;
+          case "tool_start":
+            console.log(`[tool]  → ${event.name} ${JSON.stringify(event.input)}`);
+            break;
+          case "tool_end":
+            console.log(`[tool]  ← ${event.name} (${event.ms}ms)`);
+            break;
+          case "tool_failed":
+            console.log(`[tool]  ! ${event.name}: ${event.message}`);
+            break;
+        }
+      },
+      { signal: controller.signal },
+    );
 
     send({ type: "answer", answer: result.answer });
   } catch (err) {
-    console.error(err);
-    send({ type: "error", message: INTERNAL_ERROR_MESSAGE });
+    if (!controller.signal.aborted) {
+      console.error(err);
+      send({ type: "error", message: INTERNAL_ERROR_MESSAGE });
+    }
   } finally {
-    res.end();
+    res.off("close", handleClose);
+    if (!res.destroyed && !res.writableEnded) res.end();
   }
 });
 

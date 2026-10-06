@@ -196,6 +196,32 @@ Run at least six user/assistant exchanges in one conversation, changing companie
 - The answer uses the recent comparison rather than unrelated early messages.
 - Request size and model context do not grow without bound.
 
+## 11. Edit and stop controls
+
+**Edit flow**
+
+1. Ask: `Compare ACME and GLBX.`
+2. Wait for the answer, then click **Edit** beneath the user prompt.
+3. Change `GLBX` to `ITCH` and resend.
+
+**Expected**
+
+- The original prompt and its answer are removed.
+- The original text returns to the focused composer.
+- The edited prompt starts a clean branch without retaining the removed answer.
+
+**Stop flow**
+
+1. Ask: `Which company in the coverage universe grew fastest? Compare all companies.`
+2. Click **Stop** while progress is visible.
+
+**Expected**
+
+- Progress stops and the composer becomes available again.
+- No error bubble or partial answer is added.
+- Server logs stop showing additional agent iterations or completed tool calls for the aborted request.
+- The stopped user prompt remains visible and can be edited or resubmitted.
+
 ## Regression checks
 
 After manual testing, run:

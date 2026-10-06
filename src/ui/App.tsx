@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -35,6 +35,10 @@ function parseStreamEvent(line: string): StreamEvent {
   throw new Error("Received an invalid response from the server.");
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 const EXAMPLES = [
   "Compare Acme and Globex and tell me which one appears to be growing faster.",
   "What are the biggest risks Umbrella Health flags in its filings?",
@@ -47,6 +51,26 @@ export function App() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("Thinking…");
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  let latestUserIndex = -1;
+  messages.forEach((message, index) => {
+    if (message.role === "user") latestUserIndex = index;
+  });
+
+  function editPrompt(index: number) {
+    const message = messages[index];
+    if (busy || !message || message.role !== "user") return;
+
+    setMessages((previous) => previous.slice(0, index));
+    setInput(message.text);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function stopResearch() {
+    abortControllerRef.current?.abort();
+  }
 
   async function send(question: string) {
     if (!question.trim() || busy) return;
@@ -61,11 +85,14 @@ export function App() {
     setInput("");
     setBusy(true);
     setProgress("Thinking…");
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           messages: conversation.map(({ role, text }) => ({
             role,
@@ -119,17 +146,22 @@ export function App() {
         { role: "assistant", text: finalAnswer },
       ]);
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          text: `Something went wrong: ${String(err)}`,
-          isError: true,
-        },
-      ]);
+      if (!isAbortError(err)) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            text: `Something went wrong: ${String(err)}`,
+            isError: true,
+          },
+        ]);
+      }
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+      setBusy(false);
     }
-
-    setBusy(false);
   }
 
   return (
@@ -150,12 +182,23 @@ export function App() {
           </div>
         )}
 
-        {messages.map((message, i) => (
-          <div key={i} className={`bubble ${message.role}`}>
-            {message.role === "assistant" ? (
-              <MarkdownMessage text={message.text} />
-            ) : (
-              message.text
+        {messages.map((message, index) => (
+          <div key={index} className={`message-row ${message.role}`}>
+            <div className={`bubble ${message.role}`}>
+              {message.role === "assistant" ? (
+                <MarkdownMessage text={message.text} />
+              ) : (
+                message.text
+              )}
+            </div>
+            {!busy && message.role === "user" && index === latestUserIndex && (
+              <button
+                type="button"
+                className="edit-prompt"
+                onClick={() => editPrompt(index)}
+              >
+                Edit
+              </button>
             )}
           </div>
         ))}
@@ -171,14 +214,19 @@ export function App() {
         }}
       >
         <input
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask a research question…"
           disabled={busy}
         />
-        <button type="submit" disabled={busy}>
-          Send
-        </button>
+        {busy ? (
+          <button type="button" className="stop" onClick={stopResearch}>
+            Stop
+          </button>
+        ) : (
+          <button type="submit">Send</button>
+        )}
       </form>
     </div>
   );

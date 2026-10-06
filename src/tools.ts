@@ -9,7 +9,24 @@ import { companies, documents, financials } from "./data.ts";
 /** Thrown when a tool cannot service a request. */
 export class ToolError extends Error {}
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new DOMException("The operation was aborted.", "AbortError"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 function requireInput(input: unknown): Record<string, unknown> {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
@@ -131,11 +148,11 @@ export const toolSchemas: Anthropic.Tool[] = [
   },
 ];
 
-async function searchCompanies(query: string) {
+async function searchCompanies(query: string, signal?: AbortSignal) {
   const needle = normalize(query);
   if (!needle) throw new ToolError("query must contain letters or numbers");
 
-  await sleep(250);
+  await sleep(250, signal);
   const matches = companies.filter(
     (company) =>
       normalize(company.name).includes(needle) ||
@@ -148,15 +165,15 @@ async function searchCompanies(query: string) {
   }));
 }
 
-async function getCompanyProfile(company: string) {
+async function getCompanyProfile(company: string, signal?: AbortSignal) {
   const match = resolveCompany(company);
-  await sleep(450);
+  await sleep(450, signal);
   return match;
 }
 
-async function getFinancials(company: string) {
+async function getFinancials(company: string, signal?: AbortSignal) {
   const resolvedCompany = resolveCompany(company);
-  await sleep(800);
+  await sleep(800, signal);
   const record = financials.find((record) => record.company === resolvedCompany.name);
   if (!record) {
     throw new ToolError(`no financials found for "${resolvedCompany.name}"`);
@@ -164,9 +181,13 @@ async function getFinancials(company: string) {
   return record;
 }
 
-async function searchDocuments(query: string, company?: string) {
+async function searchDocuments(
+  query: string,
+  company?: string,
+  signal?: AbortSignal,
+) {
   const resolvedCompany = company ? resolveCompany(company) : undefined;
-  await sleep(700);
+  await sleep(700, signal);
 
   const terms = String(query).trim().split(/\s+/).filter(Boolean);
   // The upstream document index rejects long queries.
@@ -199,20 +220,22 @@ async function searchDocuments(query: string, company?: string) {
 export async function executeTool(
   name: string,
   input: unknown,
+  signal?: AbortSignal,
 ): Promise<unknown> {
   const fields = requireInput(input);
 
   switch (name) {
     case "searchCompanies":
-      return searchCompanies(requireString(fields, "query"));
+      return searchCompanies(requireString(fields, "query"), signal);
     case "getCompanyProfile":
-      return getCompanyProfile(requireString(fields, "company"));
+      return getCompanyProfile(requireString(fields, "company"), signal);
     case "getFinancials":
-      return getFinancials(requireString(fields, "company"));
+      return getFinancials(requireString(fields, "company"), signal);
     case "searchDocuments":
       return searchDocuments(
         requireString(fields, "query"),
         optionalString(fields, "company"),
+        signal,
       );
     default:
       throw new ToolError(`unknown tool "${name}"`);

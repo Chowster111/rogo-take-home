@@ -55,14 +55,20 @@ export interface ConversationMessage {
 export interface AgentDependencies {
   createMessage: (
     params: Anthropic.MessageCreateParamsNonStreaming,
+    signal?: AbortSignal,
   ) => Promise<Anthropic.Message>;
   executeTool: typeof executeTool;
 }
 
+export interface AgentOptions {
+  dependencies?: AgentDependencies;
+  signal?: AbortSignal;
+}
+
 const defaultDependencies: AgentDependencies = {
-  createMessage: (params) => {
+  createMessage: (params, signal) => {
     client ??= new Anthropic();
-    return client.messages.create(params);
+    return client.messages.create(params, { signal });
   },
   executeTool,
 };
@@ -83,8 +89,9 @@ function recentConversation(conversation: ConversationMessage[]) {
 export async function runAgent(
   conversation: ConversationMessage[],
   onEvent: (event: AgentEvent) => void,
-  dependencies: AgentDependencies = defaultDependencies,
+  options: AgentOptions = {},
 ): Promise<AgentResult> {
+  const { dependencies = defaultDependencies, signal } = options;
   const messages: Anthropic.MessageParam[] = recentConversation(conversation).map(
     (message) => ({
       role: message.role,
@@ -96,16 +103,20 @@ export async function runAgent(
   let iterations = 0;
 
   while (iterations < MAX_ITERATIONS) {
+    signal?.throwIfAborted();
     iterations++;
     onEvent({ type: "iteration", n: iterations });
 
-    const response = await dependencies.createMessage({
-      model: MODEL,
-      max_tokens: 3000,
-      system: SYSTEM_PROMPT,
-      tools: toolSchemas,
-      messages,
-    });
+    const response = await dependencies.createMessage(
+      {
+        model: MODEL,
+        max_tokens: 3000,
+        system: SYSTEM_PROMPT,
+        tools: toolSchemas,
+        messages,
+      },
+      signal,
+    );
 
     messages.push({ role: "assistant", content: response.content });
 
@@ -126,9 +137,10 @@ export async function runAgent(
         let content: string;
         let isError = false;
         try {
-          const output = await dependencies.executeTool(use.name, use.input);
+          const output = await dependencies.executeTool(use.name, use.input, signal);
           content = JSON.stringify(output);
         } catch (err) {
+          if (signal?.aborted) throw err;
           const message = err instanceof Error ? err.message : String(err);
           content = `${use.name} returned: ${message}`;
           isError = true;
