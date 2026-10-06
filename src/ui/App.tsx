@@ -1,4 +1,6 @@
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface Message {
   role: "user" | "assistant";
@@ -12,6 +14,10 @@ type StreamEvent =
   | { type: "error"; message: string };
 
 const MAX_CONTEXT_MESSAGES = 9;
+
+export function MarkdownMessage({ text }: { text: string }) {
+  return <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>;
+}
 
 function parseStreamEvent(line: string): StreamEvent {
   const event = JSON.parse(line) as Partial<StreamEvent>;
@@ -146,7 +152,11 @@ export function App() {
 
         {messages.map((message, i) => (
           <div key={i} className={`bubble ${message.role}`}>
-            {message.text}
+            {message.role === "assistant" ? (
+              <MarkdownMessage text={message.text} />
+            ) : (
+              message.text
+            )}
           </div>
         ))}
 
