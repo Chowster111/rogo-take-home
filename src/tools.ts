@@ -11,6 +11,63 @@ export class ToolError extends Error {}
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function requireInput(input: unknown): Record<string, unknown> {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    throw new ToolError("tool input must be an object");
+  }
+  return input as Record<string, unknown>;
+}
+
+function requireString(input: Record<string, unknown>, field: string): string {
+  const value = input[field];
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new ToolError(`"${field}" must be a non-empty string`);
+  }
+  return value.trim();
+}
+
+function optionalString(
+  input: Record<string, unknown>,
+  field: string,
+): string | undefined {
+  const value = input[field];
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new ToolError(`"${field}" must be a non-empty string when provided`);
+  }
+  return value.trim();
+}
+
+function normalize(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function resolveCompany(identifier: string) {
+  const needle = normalize(identifier);
+  if (!needle) {
+    throw new ToolError("company must contain letters or numbers");
+  }
+
+  const nameMatch = companies.find((company) => normalize(company.name) === needle);
+  if (nameMatch) return nameMatch;
+
+  const partialMatches = companies.filter((company) =>
+    normalize(company.name).includes(needle),
+  );
+  if (partialMatches.length === 1) return partialMatches[0];
+  if (partialMatches.length > 1) {
+    const choices = partialMatches
+      .map((company) => `${company.name} (${company.ticker})`)
+      .join(", ");
+    throw new ToolError(`company "${identifier}" is ambiguous; use one of: ${choices}`);
+  }
+
+  const tickerMatch = companies.find((company) => normalize(company.ticker) === needle);
+  if (tickerMatch) return tickerMatch;
+
+  throw new ToolError(`no company found for "${identifier}"`);
+}
+
 export const toolSchemas: Anthropic.Tool[] = [
   {
     name: "searchCompanies",
@@ -19,7 +76,10 @@ export const toolSchemas: Anthropic.Tool[] = [
     input_schema: {
       type: "object",
       properties: {
-        query: { type: "string", description: "A company name or part of one." },
+        query: {
+          type: "string",
+          description: "A company name, ticker, or part of either.",
+        },
       },
       required: ["query"],
     },
@@ -31,7 +91,7 @@ export const toolSchemas: Anthropic.Tool[] = [
     input_schema: {
       type: "object",
       properties: {
-        company: { type: "string", description: "The company name." },
+        company: { type: "string", description: "The company name or ticker." },
       },
       required: ["company"],
     },
@@ -43,7 +103,7 @@ export const toolSchemas: Anthropic.Tool[] = [
     input_schema: {
       type: "object",
       properties: {
-        company: { type: "string", description: "The company name." },
+        company: { type: "string", description: "The company name or ticker." },
       },
       required: ["company"],
     },
@@ -58,7 +118,7 @@ export const toolSchemas: Anthropic.Tool[] = [
         query: { type: "string", description: "Keywords to search for." },
         company: {
           type: "string",
-          description: "Optional. Restrict the search to one company.",
+          description: "Optional. Restrict the search to a company name or ticker.",
         },
       },
       required: ["query"],
@@ -67,9 +127,15 @@ export const toolSchemas: Anthropic.Tool[] = [
 ];
 
 async function searchCompanies(query: string) {
+  const needle = normalize(query);
+  if (!needle) throw new ToolError("query must contain letters or numbers");
+
   await sleep(250);
-  const needle = String(query).toLowerCase();
-  const matches = companies.filter((c) => c.name.toLowerCase().includes(needle));
+  const matches = companies.filter(
+    (company) =>
+      normalize(company.name).includes(needle) ||
+      normalize(company.ticker).includes(needle),
+  );
   return matches.map((c) => ({
     name: c.name,
     ticker: c.ticker,
@@ -78,24 +144,23 @@ async function searchCompanies(query: string) {
 }
 
 async function getCompanyProfile(company: string) {
+  const match = resolveCompany(company);
   await sleep(450);
-  const match = companies.find((c) => c.name === company);
-  if (!match) {
-    throw new ToolError(`no profile found for "${company}"`);
-  }
   return match;
 }
 
 async function getFinancials(company: string) {
+  const resolvedCompany = resolveCompany(company);
   await sleep(800);
-  const record = financials.find((f) => f.company === company);
+  const record = financials.find((record) => record.company === resolvedCompany.name);
   if (!record) {
-    throw new ToolError(`no financials found for "${company}"`);
+    throw new ToolError(`no financials found for "${resolvedCompany.name}"`);
   }
   return record;
 }
 
 async function searchDocuments(query: string, company?: string) {
+  const resolvedCompany = company ? resolveCompany(company) : undefined;
   await sleep(700);
 
   const terms = String(query).trim().split(/\s+/).filter(Boolean);
@@ -106,8 +171,8 @@ async function searchDocuments(query: string, company?: string) {
     );
   }
 
-  const pool = company
-    ? documents.filter((d) => d.company === company)
+  const pool = resolvedCompany
+    ? documents.filter((document) => document.company === resolvedCompany.name)
     : documents;
 
   const scored = pool.map((doc) => {
@@ -128,17 +193,22 @@ async function searchDocuments(query: string, company?: string) {
 
 export async function executeTool(
   name: string,
-  input: Record<string, unknown>,
+  input: unknown,
 ): Promise<unknown> {
+  const fields = requireInput(input);
+
   switch (name) {
     case "searchCompanies":
-      return searchCompanies(input.query as string);
+      return searchCompanies(requireString(fields, "query"));
     case "getCompanyProfile":
-      return getCompanyProfile(input.company as string);
+      return getCompanyProfile(requireString(fields, "company"));
     case "getFinancials":
-      return getFinancials(input.company as string);
+      return getFinancials(requireString(fields, "company"));
     case "searchDocuments":
-      return searchDocuments(input.query as string, input.company as string | undefined);
+      return searchDocuments(
+        requireString(fields, "query"),
+        optionalString(fields, "company"),
+      );
     default:
       throw new ToolError(`unknown tool "${name}"`);
   }

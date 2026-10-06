@@ -134,6 +134,7 @@ describe("runAgent", () => {
         type: "tool_result",
         tool_use_id: "failure-id",
         content: "failingTool returned: source unavailable",
+        is_error: true,
       },
     ]);
     expect(events).toContainEqual({
