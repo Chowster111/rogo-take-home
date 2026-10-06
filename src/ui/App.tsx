@@ -10,6 +10,9 @@ interface Message {
 
 type StreamEvent =
   | { type: "progress"; message: string }
+  | { type: "answer_start" }
+  | { type: "answer_delta"; text: string }
+  | { type: "answer_reset" }
   | { type: "answer"; answer: string }
   | { type: "error"; message: string };
 
@@ -24,6 +27,15 @@ function parseStreamEvent(line: string): StreamEvent {
 
   if (event.type === "progress" && typeof event.message === "string") {
     return { type: "progress", message: event.message };
+  }
+  if (event.type === "answer_start") {
+    return { type: "answer_start" };
+  }
+  if (event.type === "answer_delta" && typeof event.text === "string") {
+    return { type: "answer_delta", text: event.text };
+  }
+  if (event.type === "answer_reset") {
+    return { type: "answer_reset" };
   }
   if (event.type === "answer" && typeof event.answer === "string") {
     return { type: "answer", answer: event.answer };
@@ -51,6 +63,7 @@ export function App() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("Thinking…");
+  const [streamingAnswer, setStreamingAnswer] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
@@ -60,7 +73,7 @@ export function App() {
       behavior: messages.length > 1 ? "smooth" : "auto",
       block: "end",
     });
-  }, [messages, progress, busy]);
+  }, [messages, progress, streamingAnswer, busy]);
 
   let latestUserIndex = -1;
   messages.forEach((message, index) => {
@@ -101,6 +114,7 @@ export function App() {
     setInput("");
     setBusy(true);
     setProgress("Thinking…");
+    setStreamingAnswer(null);
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
@@ -136,6 +150,11 @@ export function App() {
 
         const event = parseStreamEvent(line);
         if (event.type === "progress") setProgress(event.message);
+        if (event.type === "answer_start") setStreamingAnswer("");
+        if (event.type === "answer_delta") {
+          setStreamingAnswer((current) => (current ?? "") + event.text);
+        }
+        if (event.type === "answer_reset") setStreamingAnswer(null);
         if (event.type === "answer") answer = event.answer;
         if (event.type === "error") throw new Error(event.message);
       };
@@ -161,6 +180,7 @@ export function App() {
         ...prev,
         { role: "assistant", text: finalAnswer },
       ]);
+      setStreamingAnswer(null);
     } catch (err) {
       if (!isAbortError(err)) {
         setMessages((prev) => [
@@ -176,6 +196,7 @@ export function App() {
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
       }
+      setStreamingAnswer(null);
       setBusy(false);
     }
   }
@@ -233,9 +254,19 @@ export function App() {
           </div>
         ))}
 
-        {busy && (
+        {busy && streamingAnswer !== null && (
+          <div className="bubble assistant streaming-answer" aria-hidden="true">
+            <MarkdownMessage text={streamingAnswer} />
+          </div>
+        )}
+        {busy && streamingAnswer === null && (
           <div className="bubble assistant pending" role="status">
-            {progress}
+            <span className="progress-dots" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
+            <span>{progress}</span>
           </div>
         )}
         <div ref={transcriptEndRef} className="transcript-end" aria-hidden="true" />

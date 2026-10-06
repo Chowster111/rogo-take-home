@@ -189,8 +189,78 @@ header p {
 }
 
 .bubble.pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: #8b97a3;
   white-space: pre-wrap;
+}
+
+.streaming-answer::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 3px;
+  vertical-align: -0.15em;
+  background: #62707f;
+  animation: cursor-blink 0.9s steps(1) infinite;
+}
+
+.streaming-answer > p:last-of-type {
+  display: inline;
+}
+
+.progress-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.progress-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: progress-pulse 1.2s ease-in-out infinite;
+}
+
+.progress-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.progress-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes progress-pulse {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes cursor-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-dots span {
+    animation: none;
+    opacity: 0.65;
+  }
+
+  .streaming-answer::after {
+    animation: none;
+  }
 }
 
 .edit-prompt {

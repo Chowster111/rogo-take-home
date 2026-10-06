@@ -175,6 +175,70 @@ describe("runAgent", () => {
     });
   });
 
+  it("forwards streamed text deltas for a final answer", async () => {
+    const events: AgentEvent[] = [];
+    const dependencies: AgentDependencies = {
+      createMessage: async () => {
+        throw new Error("non-streaming model call should not be used");
+      },
+      streamMessage: async (_params, onText) => {
+        onText("Acme ");
+        onText("wins.");
+        return message([text("Acme wins.")]);
+      },
+      executeTool: async () => {
+        throw new Error("tool should not be called");
+      },
+    };
+
+    const result = await runAgent(conversation, (event) => events.push(event), {
+      dependencies,
+    });
+
+    expect(result.answer).toBe("Acme wins.");
+    expect(events).toEqual([
+      { type: "iteration", n: 1 },
+      { type: "answer_start" },
+      { type: "answer_delta", text: "Acme " },
+      { type: "answer_delta", text: "wins." },
+    ]);
+  });
+
+  it("resets streamed preamble text before a tool iteration continues", async () => {
+    const events: AgentEvent[] = [];
+    let modelCall = 0;
+    const dependencies: AgentDependencies = {
+      createMessage: async () => {
+        throw new Error("non-streaming model call should not be used");
+      },
+      streamMessage: async (_params, onText) => {
+        modelCall++;
+        if (modelCall === 1) {
+          onText("I'll check.");
+          return message([text("I'll check."), toolUse("tool-id", "researchTool")]);
+        }
+
+        onText("Final answer.");
+        return message([text("Final answer.")]);
+      },
+      executeTool: async () => ({ revenue: 100 }),
+    };
+
+    const result = await runAgent(conversation, (event) => events.push(event), {
+      dependencies,
+    });
+    const answerEvents = events.filter((event) => event.type.startsWith("answer_"));
+
+    expect(result.answer).toBe("Final answer.");
+    expect(answerEvents).toEqual([
+      { type: "answer_start" },
+      { type: "answer_delta", text: "I'll check." },
+      { type: "answer_reset" },
+      { type: "answer_start" },
+      { type: "answer_delta", text: "Final answer." },
+    ]);
+  });
+
   it("passes cancellation to an in-flight model request", async () => {
     const controller = new AbortController();
     let receivedSignal: AbortSignal | undefined;

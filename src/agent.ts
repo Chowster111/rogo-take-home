@@ -39,6 +39,9 @@ ${companies
 
 export type AgentEvent =
   | { type: "iteration"; n: number }
+  | { type: "answer_start" }
+  | { type: "answer_delta"; text: string }
+  | { type: "answer_reset" }
   | { type: "tool_start"; name: string; input: unknown }
   | { type: "tool_end"; name: string; ms: number }
   | { type: "tool_failed"; name: string; message: string };
@@ -58,6 +61,11 @@ export interface AgentDependencies {
     params: Anthropic.MessageCreateParamsNonStreaming,
     signal?: AbortSignal,
   ) => Promise<Anthropic.Message>;
+  streamMessage?: (
+    params: Anthropic.MessageCreateParamsNonStreaming,
+    onText: (text: string) => void,
+    signal?: AbortSignal,
+  ) => Promise<Anthropic.Message>;
   executeTool: typeof executeTool;
 }
 
@@ -70,6 +78,12 @@ const defaultDependencies: AgentDependencies = {
   createMessage: (params, signal) => {
     client ??= new Anthropic();
     return client.messages.create(params, { signal });
+  },
+  streamMessage: async (params, onText, signal) => {
+    client ??= new Anthropic();
+    const stream = client.messages.stream(params, { signal });
+    stream.on("text", onText);
+    return stream.finalMessage();
   },
   executeTool,
 };
@@ -108,16 +122,24 @@ export async function runAgent(
     iterations++;
     onEvent({ type: "iteration", n: iterations });
 
-    const response = await dependencies.createMessage(
-      {
-        model: MODEL,
-        max_tokens: 3000,
-        system: SYSTEM_PROMPT,
-        tools: toolSchemas,
-        messages,
-      },
-      signal,
-    );
+    const params: Anthropic.MessageCreateParamsNonStreaming = {
+      model: MODEL,
+      max_tokens: 3000,
+      system: SYSTEM_PROMPT,
+      tools: toolSchemas,
+      messages,
+    };
+    let emittedText = false;
+    const onText = (text: string) => {
+      if (!emittedText) {
+        emittedText = true;
+        onEvent({ type: "answer_start" });
+      }
+      onEvent({ type: "answer_delta", text });
+    };
+    const response = dependencies.streamMessage
+      ? await dependencies.streamMessage(params, onText, signal)
+      : await dependencies.createMessage(params, signal);
 
     messages.push({ role: "assistant", content: response.content });
 
@@ -129,6 +151,8 @@ export async function runAgent(
       draft = textOf(response);
       break;
     }
+
+    if (emittedText) onEvent({ type: "answer_reset" });
 
     const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
       toolUses.map(async (use) => {

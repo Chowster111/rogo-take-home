@@ -22,6 +22,9 @@ const INTERNAL_ERROR_MESSAGE =
 
 type StreamEvent =
   | { type: "progress"; message: string }
+  | { type: "answer_start" }
+  | { type: "answer_delta"; text: string }
+  | { type: "answer_reset" }
   | { type: "answer"; answer: string }
   | { type: "error"; message: string };
 
@@ -40,6 +43,9 @@ function progressMessage(event: AgentEvent): string | undefined {
       return TOOL_PROGRESS[event.name] ?? "Researching…";
     case "tool_failed":
       return "A source failed; continuing with available evidence…";
+    case "answer_start":
+    case "answer_delta":
+    case "answer_reset":
     case "tool_end":
       return undefined;
   }
@@ -95,6 +101,12 @@ app.post("/api/chat", async (req, res) => {
     const result = await runAgent(
       conversation,
       (event) => {
+        if (event.type === "answer_start") send({ type: "answer_start" });
+        if (event.type === "answer_delta") {
+          send({ type: "answer_delta", text: event.text });
+        }
+        if (event.type === "answer_reset") send({ type: "answer_reset" });
+
         const progress = progressMessage(event);
         if (progress) send({ type: "progress", message: progress });
 
@@ -110,6 +122,10 @@ app.post("/api/chat", async (req, res) => {
             break;
           case "tool_failed":
             console.log(`[tool]  ! ${event.name}: ${event.message}`);
+            break;
+          case "answer_start":
+          case "answer_delta":
+          case "answer_reset":
             break;
         }
       },

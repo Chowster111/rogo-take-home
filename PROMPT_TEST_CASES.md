@@ -4,7 +4,7 @@
 
 > Compare ACME and GLBX across revenue growth, margins, and free cash flow. Use a table and finish with a bold conclusion.
 
-Check: progress appears, tools run in parallel, `ACME` resolves correctly, and the table renders with borders.
+Check: progress appears, tools run in parallel, answer text streams in incrementally, `ACME` resolves correctly, and the completed table renders with borders.
 
 ## 2. Ambiguity and follow-ups
 

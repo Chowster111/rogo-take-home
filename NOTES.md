@@ -6,7 +6,7 @@
 - Tightened the agent prompt, iteration limit, and output-token budget to improve grounding and bound worst-case cost and latency.
 - Parallelized independent tool calls while preserving result order and isolating individual tool failures.
 - Preserved recent conversation history for follow-ups while capping model context and request growth.
-- Streamed tool progress to the UI so analysts see what the agent is doing during longer requests.
+- Streamed tool progress and model answer tokens so analysts see both research activity and the response as it is generated.
 - Added latest-prompt editing and end-to-end cancellation across the browser, server, model request, and tools.
 - Added automatic transcript scrolling, a New chat reset, and accessible live-status and keyboard-focus behavior.
 - Rendered assistant responses as safe GitHub-flavored Markdown with readable tables.
@@ -17,7 +17,7 @@
 ## Verification
 
 - `npm run typecheck`
-- `npm test` — 17 tests passing
+- `npm test` — 19 tests passing
 
 ## Deliberately deferred
 
