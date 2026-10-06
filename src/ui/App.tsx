@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -53,6 +53,14 @@ export function App() {
   const [progress, setProgress] = useState("Thinking…");
   const abortControllerRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({
+      behavior: messages.length > 1 ? "smooth" : "auto",
+      block: "end",
+    });
+  }, [messages, progress, busy]);
 
   let latestUserIndex = -1;
   messages.forEach((message, index) => {
@@ -70,6 +78,14 @@ export function App() {
 
   function stopResearch() {
     abortControllerRef.current?.abort();
+  }
+
+  function startNewChat() {
+    if (busy) return;
+    setMessages([]);
+    setInput("");
+    setProgress("Thinking…");
+    requestAnimationFrame(() => inputRef.current?.focus());
   }
 
   async function send(question: string) {
@@ -167,11 +183,24 @@ export function App() {
   return (
     <div className="app">
       <header>
-        <h1>Rogo Research</h1>
-        <p>Ask a question about a company in our coverage universe.</p>
+        <div>
+          <h1>Rogo Research</h1>
+          <p>Ask a question about a company in our coverage universe.</p>
+        </div>
+        {!busy && messages.length > 0 && (
+          <button type="button" className="new-chat" onClick={startNewChat}>
+            New chat
+          </button>
+        )}
       </header>
 
-      <div className="transcript">
+      <div
+        className="transcript"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions text"
+        aria-busy={busy}
+      >
         {messages.length === 0 && (
           <div className="examples">
             {EXAMPLES.map((example) => (
@@ -195,6 +224,7 @@ export function App() {
               <button
                 type="button"
                 className="edit-prompt"
+                aria-label={`Edit prompt: ${message.text}`}
                 onClick={() => editPrompt(index)}
               >
                 Edit
@@ -203,11 +233,17 @@ export function App() {
           </div>
         ))}
 
-        {busy && <div className="bubble assistant pending">{progress}</div>}
+        {busy && (
+          <div className="bubble assistant pending" role="status">
+            {progress}
+          </div>
+        )}
+        <div ref={transcriptEndRef} className="transcript-end" aria-hidden="true" />
       </div>
 
       <form
         className="composer"
+        aria-label="Research question"
         onSubmit={(e) => {
           e.preventDefault();
           send(input);
@@ -218,10 +254,16 @@ export function App() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask a research question…"
+          aria-label="Ask a research question"
           disabled={busy}
         />
         {busy ? (
-          <button type="button" className="stop" onClick={stopResearch}>
+          <button
+            type="button"
+            className="stop"
+            aria-label="Stop research"
+            onClick={stopResearch}
+          >
             Stop
           </button>
         ) : (

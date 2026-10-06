@@ -8,6 +8,7 @@
 - Preserved recent conversation history for follow-ups while capping model context and request growth.
 - Streamed tool progress to the UI so analysts see what the agent is doing during longer requests.
 - Added latest-prompt editing and end-to-end cancellation across the browser, server, model request, and tools.
+- Added automatic transcript scrolling, a New chat reset, and accessible live-status and keyboard-focus behavior.
 - Rendered assistant responses as safe GitHub-flavored Markdown with readable tables.
 - Added request-size limits, runtime input validation, and safe client-facing API errors.
 - Added flexible company lookup by normalized name, unique partial name, or ticker.

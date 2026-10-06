@@ -22,6 +22,13 @@ body {
   gap: 20px;
 }
 
+header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 header h1 {
   margin: 0 0 4px;
   font-size: 20px;
@@ -33,11 +40,30 @@ header p {
   font-size: 14px;
 }
 
+.new-chat {
+  flex: none;
+  border: 1px solid #c9d1da;
+  background: #fff;
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: #33414f;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.new-chat:hover {
+  border-color: #8b97a3;
+}
+
 .transcript {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.transcript-end {
+  height: 1px;
 }
 
 .examples {
@@ -217,4 +243,10 @@ header p {
 .composer input:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid #5b9df9;
+  outline-offset: 2px;
 }

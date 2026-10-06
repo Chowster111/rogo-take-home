@@ -32,6 +32,10 @@ Check: supported analysis is provided, but unavailable market data is not invent
 - Ask `Compare ACME and GLBX.`, click **Edit**, change `GLBX` to `ITCH`, and resend. The old branch should be removed.
 - Ask `Which company grew fastest? Compare all companies.`, then click **Stop**. Research should stop without an error bubble.
 
+## 6. Chat controls
+
+Check that long answers scroll into view, keyboard focus is visible, and **New chat** clears the transcript and focuses the composer.
+
 ## Automated checks
 
 ```bash
