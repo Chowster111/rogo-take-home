@@ -9,7 +9,7 @@ import { executeTool, toolSchemas } from "./tools.ts";
 const MODEL = process.env.ROGO_MODEL ?? "claude-sonnet-5";
 const MAX_ITERATIONS = 8;
 
-const client = new Anthropic();
+let client: Anthropic | undefined;
 
 const SYSTEM_PROMPT = `You are Rogo Research, an assistant that answers company questions for financial analysts.
 
@@ -49,6 +49,21 @@ export interface ConversationMessage {
   content: string;
 }
 
+export interface AgentDependencies {
+  createMessage: (
+    params: Anthropic.MessageCreateParamsNonStreaming,
+  ) => Promise<Anthropic.Message>;
+  executeTool: typeof executeTool;
+}
+
+const defaultDependencies: AgentDependencies = {
+  createMessage: (params) => {
+    client ??= new Anthropic();
+    return client.messages.create(params);
+  },
+  executeTool,
+};
+
 function textOf(message: Anthropic.Message): string {
   return message.content
     .filter((block): block is Anthropic.TextBlock => block.type === "text")
@@ -59,6 +74,7 @@ function textOf(message: Anthropic.Message): string {
 export async function runAgent(
   conversation: ConversationMessage[],
   onEvent: (event: AgentEvent) => void,
+  dependencies: AgentDependencies = defaultDependencies,
 ): Promise<AgentResult> {
   const messages: Anthropic.MessageParam[] = conversation.map((message) => ({
     role: message.role,
@@ -72,7 +88,7 @@ export async function runAgent(
     iterations++;
     onEvent({ type: "iteration", n: iterations });
 
-    const response = await client.messages.create({
+    const response = await dependencies.createMessage({
       model: MODEL,
       max_tokens: 3000,
       system: SYSTEM_PROMPT,
@@ -98,7 +114,7 @@ export async function runAgent(
 
         let content: string;
         try {
-          const output = await executeTool(
+          const output = await dependencies.executeTool(
             use.name,
             use.input as Record<string, unknown>,
           );

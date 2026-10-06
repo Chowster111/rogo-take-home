@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import type { ErrorRequestHandler } from "express";
 import { runAgent, type ConversationMessage } from "./agent.ts";
 
 if (!process.env.ANTHROPIC_API_KEY) {
@@ -10,7 +11,10 @@ if (!process.env.ANTHROPIC_API_KEY) {
 }
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "16kb" }));
+
+const INTERNAL_ERROR_MESSAGE =
+  "Unable to complete the research request right now. Please try again.";
 
 function isConversationMessage(value: unknown): value is ConversationMessage {
   if (typeof value !== "object" || value === null) return false;
@@ -24,7 +28,7 @@ function isConversationMessage(value: unknown): value is ConversationMessage {
 }
 
 app.post("/api/chat", async (req, res) => {
-  const conversation = req.body.messages;
+  const conversation = req.body?.messages;
   if (
     !Array.isArray(conversation) ||
     conversation.length === 0 ||
@@ -61,9 +65,28 @@ app.post("/api/chat", async (req, res) => {
     res.json({ answer: result.answer });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: INTERNAL_ERROR_MESSAGE });
   }
 });
+
+const handleJsonError: ErrorRequestHandler = (err, _req, res, _next) => {
+  const httpError = err as Error & { status?: number; type?: string };
+
+  if (httpError.type === "entity.too.large") {
+    res.status(413).json({ error: "Request body is too large." });
+    return;
+  }
+
+  if (httpError.type === "entity.parse.failed" || httpError.status === 400) {
+    res.status(400).json({ error: "Request body must contain valid JSON." });
+    return;
+  }
+
+  console.error(err);
+  res.status(500).json({ error: INTERNAL_ERROR_MESSAGE });
+};
+
+app.use(handleJsonError);
 
 const port = Number(process.env.PORT ?? 8787);
 app.listen(port, () => {
