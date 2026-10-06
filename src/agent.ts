@@ -8,6 +8,7 @@ import { executeTool, toolSchemas } from "./tools.ts";
 
 const MODEL = process.env.ROGO_MODEL ?? "claude-sonnet-5";
 const MAX_ITERATIONS = 8;
+const MAX_CONVERSATION_MESSAGES = 9;
 
 let client: Anthropic | undefined;
 
@@ -71,15 +72,23 @@ function textOf(message: Anthropic.Message): string {
     .join("\n");
 }
 
+function recentConversation(conversation: ConversationMessage[]) {
+  const recent = conversation.slice(-MAX_CONVERSATION_MESSAGES);
+  const firstUser = recent.findIndex((message) => message.role === "user");
+  return firstUser > 0 ? recent.slice(firstUser) : recent;
+}
+
 export async function runAgent(
   conversation: ConversationMessage[],
   onEvent: (event: AgentEvent) => void,
   dependencies: AgentDependencies = defaultDependencies,
 ): Promise<AgentResult> {
-  const messages: Anthropic.MessageParam[] = conversation.map((message) => ({
-    role: message.role,
-    content: message.content,
-  }));
+  const messages: Anthropic.MessageParam[] = recentConversation(conversation).map(
+    (message) => ({
+      role: message.role,
+      content: message.content,
+    }),
+  );
 
   let draft = "";
   let iterations = 0;

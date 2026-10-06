@@ -4,6 +4,7 @@ import {
   runAgent,
   type AgentDependencies,
   type AgentEvent,
+  type ConversationMessage,
 } from "./agent.ts";
 
 const conversation = [{ role: "user" as const, content: "Research Acme." }];
@@ -44,6 +45,34 @@ describe("runAgent", () => {
     const result = await runAgent(conversation, () => {}, dependencies);
 
     expect(result).toEqual({ answer: "Acme is growing.", iterations: 1 });
+  });
+
+  it("limits model context to the most recent conversation messages", async () => {
+    const longConversation: ConversationMessage[] = Array.from(
+      { length: 13 },
+      (_, index) => ({
+        role: index % 2 === 0 ? "user" : "assistant",
+        content: `message-${index}`,
+      }),
+    );
+    let observedMessages: Anthropic.MessageParam[] = [];
+    const dependencies: AgentDependencies = {
+      createMessage: async (params) => {
+        observedMessages = params.messages.map((message) => ({ ...message }));
+        return message([text("Recent context used.")]);
+      },
+      executeTool: async () => {
+        throw new Error("tool should not be called");
+      },
+    };
+
+    await runAgent(longConversation, () => {}, dependencies);
+
+    expect(observedMessages).toHaveLength(9);
+    expect(observedMessages[0].role).toBe("user");
+    expect(observedMessages.map(({ content }) => content)).toEqual(
+      Array.from({ length: 9 }, (_, index) => `message-${index + 4}`),
+    );
   });
 
   it("starts independent tool calls in parallel and preserves result order", async () => {

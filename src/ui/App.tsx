@@ -11,6 +11,8 @@ type StreamEvent =
   | { type: "answer"; answer: string }
   | { type: "error"; message: string };
 
+const MAX_CONTEXT_MESSAGES = 9;
+
 function parseStreamEvent(line: string): StreamEvent {
   const event = JSON.parse(line) as Partial<StreamEvent>;
 
@@ -44,7 +46,10 @@ export function App() {
     if (!question.trim() || busy) return;
 
     const userMessage: Message = { role: "user", text: question.trim() };
-    const conversation = [...messages.filter((message) => !message.isError), userMessage];
+    const recentMessages = messages
+      .filter((message) => !message.isError)
+      .slice(-(MAX_CONTEXT_MESSAGES - 1));
+    const conversation = [...recentMessages, userMessage];
 
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
