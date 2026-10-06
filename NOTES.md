@@ -7,6 +7,7 @@
 - Parallelized independent tool calls while preserving result order and isolating individual tool failures.
 - Preserved recent conversation history for follow-ups while capping model context and request growth.
 - Streamed tool progress to the UI so analysts see what the agent is doing during longer requests.
+- Rendered assistant responses as safe GitHub-flavored Markdown with readable tables.
 - Added request-size limits, runtime input validation, and safe client-facing API errors.
 - Added flexible company lookup by normalized name, unique partial name, or ticker.
 - Made model and tool dependencies injectable and added deterministic tests for completion, concurrency, failures, iteration limits, and tool resolution.
@@ -14,9 +15,9 @@
 ## Verification
 
 - `npm run typecheck`
-- `npm test` — 14 tests passing
+- `npm test` — 15 tests passing
 
 ## Deliberately deferred
 
 - I did not add retries, cancellation, or per-call timeouts because the provided tools are local and deterministic.
-- I kept answer rendering as plain text rather than adding Markdown or structured citation UI.
+- I did not add a structured citation UI; answers instead identify supporting periods and documents in text.
