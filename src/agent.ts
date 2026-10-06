@@ -24,8 +24,6 @@ ${companies
   .join("\n")}
 `;
 
-const EDITOR_PROMPT = `You are an editor. Rewrite the analyst's draft answer so that it reads clearly and is easy to follow. Keep it brief and conversational. Return only the rewritten answer.`;
-
 export type AgentEvent =
   | { type: "iteration"; n: number }
   | { type: "tool_start"; name: string; input: unknown }
@@ -104,18 +102,5 @@ export async function runAgent(
       "I looked at a number of sources but ran out of research steps before I could pull the answer together. Try asking a narrower question.";
   }
 
-  // Polish the draft before showing it to the analyst.
-  const edited = await client.messages.create({
-    model: MODEL,
-    max_tokens: 16000,
-    system: EDITOR_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: `Research transcript:\n${JSON.stringify(messages)}\n\nDraft answer:\n${draft}\n\nRewrite the draft answer.`,
-      },
-    ],
-  });
-
-  return { answer: textOf(edited), iterations };
+  return { answer: draft, iterations };
 }
