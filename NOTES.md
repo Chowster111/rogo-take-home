@@ -19,5 +19,5 @@
 
 ## Deliberately deferred
 
-- I did not add retries, cancellation, or per-call timeouts because the provided tools are local and deterministic.
-- I did not add a structured citation UI; answers instead identify supporting periods and documents in text.
+- I did not add custom retries, request cancellation, or shorter timeouts. The research tools are local and deterministic, while the Anthropic SDK already provides retry and timeout defaults; end-to-end cancellation would require additional plumbing across the UI, server, agent loop, and SDK.
+- I did not add a structured citation UI because the fictional source documents have titles and dates but no external URLs. Answers identify supporting periods and document titles in text; adding citation cards would require a larger structured-source response contract rather than fragile Markdown parsing.
